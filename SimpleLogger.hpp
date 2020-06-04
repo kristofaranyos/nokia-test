@@ -2,7 +2,10 @@
 #define SIMPLELOGGER_HPP
 
 
+#include <chrono>
 #include <cstdint>
+#include <ctime>
+#include <iomanip>
 #include <iostream>
 #include <random>
 #include <sstream>
@@ -58,15 +61,19 @@ namespace SL {
 	class LogEntry {
 		std::string id;
 		LogLevel logLevel;
+		time_t time;
 		std::string message;
 		std::string what;
 
 	public:
-		LogEntry(LogLevel level, const std::string &message)
-				: id(uuid::generate_uuid_v4()), logLevel(level), message(message), what("") {}
+		LogEntry(LogLevel level, std::chrono::time_point<std::chrono::system_clock> time, const std::string &message)
+				: id(uuid::generate_uuid_v4()), logLevel(level), time(std::chrono::system_clock::to_time_t(time)),
+				  message(message), what("") {}
 
-		LogEntry(LogLevel level, const std::string &message, const std::string &what)
-				: id(uuid::generate_uuid_v4()), logLevel(level), message(message), what(what) {}
+		LogEntry(LogLevel level, std::chrono::time_point<std::chrono::system_clock> time, const std::string &message,
+				 const std::string &what)
+				: id(uuid::generate_uuid_v4()), logLevel(level), time(std::chrono::system_clock::to_time_t(time)),
+				  message(message), what(what) {}
 
 		const std::string &getId() const { return id; }
 
@@ -88,6 +95,8 @@ namespace SL {
 			return "";
 		}
 
+		const time_t &getTime() const { return time; }
+
 		const std::string &getMessage() const { return message; }
 
 		const std::string &getWhat() const { return what; }
@@ -107,6 +116,13 @@ namespace SL {
 		uint32_t maxFileLenght;
 		uint32_t maxRotation;
 
+		//uses put_time to format the time
+		static std::string getFormattedTime(time_t time, const std::string& format) {
+			std::stringstream ss;
+			ss << std::put_time(std::localtime(&time), format.c_str());
+			return ss.str();
+		}
+
 	public:
 		//usable default values
 		Logger() : enableConsoleLogging(false),
@@ -118,6 +134,7 @@ namespace SL {
 				   maxFileLenght(0),
 				   maxRotation(1) {}
 
+		//fine tune constructor, prefer to use basic one and just set whatever you need differently
 		Logger(bool enableConsoleLogging, LogLevel minConsoleLogLevel, const std::string &consoleFormat,
 			   bool enableFileLogging, LogLevel minFileLogLevel, const std::string &fileFormat,
 			   const std::string &filePrefix, uint32_t maxFileLenght, uint32_t maxRotation)
@@ -134,7 +151,9 @@ namespace SL {
 		void log(LogLevel level, const std::string &message, std::exception *errorClass = nullptr) {
 			std::string what = errorClass != nullptr ? errorClass->what() : "";
 
-			LogEntry entry(level, message, what);
+			LogEntry entry(level, std::chrono::system_clock::now(), message, what);
+
+			//std::cout << getFormattedTime(entry.getTime(), "%Y-%m-%d %X");
 
 			//todo save entry
 		}
