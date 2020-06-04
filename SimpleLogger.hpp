@@ -59,6 +59,12 @@ namespace SL {
 		DEBUG = 0, INFO, WARNING, ERROR
 	};
 
+	class InvalidLogIDException : public std::runtime_error {
+	public:
+		explicit InvalidLogIDException(const std::string &id) : runtime_error(
+				"Log with id " + id + " doesn't exist.") {}
+	};
+
 	class LogEntry {
 		std::string id;
 		LogLevel logLevel;
@@ -84,16 +90,14 @@ namespace SL {
 		std::string getLogLevelAsString() const {
 			switch (logLevel) {
 				case LogLevel::DEBUG:
-					return "DEBUG";
+					return "DEBUG..";
 				case LogLevel::INFO:
-					return "INFO";
+					return "INFO...";
 				case LogLevel::WARNING:
 					return "WARNING";
 				case LogLevel::ERROR:
-					return "ERROR";
+					return "ERROR..";
 			}
-
-			return "";
 		}
 
 		const time_t &getTime() const { return time; }
@@ -118,6 +122,8 @@ namespace SL {
 		uint32_t maxFileLenght;
 		uint32_t maxRotation;
 
+		std::string dateFormat;
+
 		std::vector<LogEntry> entries;
 
 		//uses put_time to format the time
@@ -128,8 +134,8 @@ namespace SL {
 		}
 
 		/*
-		 * Format settings: comma separated values, with NO space between
-		 * todo: add trim to not depend on proper spacing
+		 * Format settings: you can write whatever you want (lowercase, though)
+		 * and the function will substitute the data in place of the tokens
 		 *
 		 * Tokens:
 		 * - I : id
@@ -138,52 +144,48 @@ namespace SL {
 		 * - M : Message
 		 * - W : Output of what() if any
 		 *
-		 * Example: "T,L,M,W"
+		 * Example: "[T] L, M, W"
 		 */
-		static std::string
-		getFormattedEntry(const LogEntry &entry, const std::string &lineFormat, const std::string &dateFormat) {
-			std::string formattedEntry, token, a;
-			std::stringstream ss(lineFormat);
+		std::string getFormattedEntry(const LogEntry &entry, const std::string &lineFormat) const {
+			std::string formattedEntry;
 
-			while (std::getline(ss, token, ',')) {
-				//switch case doesn't like
-				if (token == "I") { a = entry.getId(); }
-				if (token == "T") { a = getFormattedTime(entry.getTime(), dateFormat); }
-				if (token == "L") { a = entry.getLogLevelAsString(); }
-				if (token == "M") { a = entry.getMessage(); }
-				if (token == "W") {
-					if (entry.getWhat().empty()) {
-						//avoid empty ", "
-						continue;
-					}
+			std::for_each(lineFormat.begin(), lineFormat.end(), [&](char c) {
+				std::string substitute;
 
-					a = entry.getWhat();
+				if (c == 'I') { substitute = entry.getId(); }
+				if (c == 'T') { substitute = getFormattedTime(entry.getTime(), dateFormat); }
+				if (c == 'L') { substitute = entry.getLogLevelAsString(); }
+				if (c == 'M') { substitute = entry.getMessage(); }
+				if (c == 'W') {
+					if (entry.getWhat().empty()) { substitute = "[empty]"; }
+					else { substitute = entry.getWhat(); }
+
 				}
 
-				formattedEntry += a + ", ";
-			}
+				formattedEntry += substitute.empty() ? std::string(1, c) : substitute;
+			});
 
-			//remove last ", "
-			return formattedEntry.substr(0, formattedEntry.length() - 2);
+			return formattedEntry;
 		}
 
 	public:
 		//usable default values
 		Logger() : enableConsoleLogging(false),
 				   minConsoleLogLevel(LogLevel::WARNING),
-				   consoleFormat("T,L,I,M,W"),
+				   consoleFormat("[T] L, M, W"),
 				   consoleStream(&std::cout), //could be cerr too
 				   enableFileLogging(true),
 				   minFileLogLevel(LogLevel::WARNING),
-				   fileFormat("T,L,I,M,W"), filePrefix("log"),
+				   fileFormat("[T] L, M, W"), filePrefix("log"),
 				   maxFileLenght(0),
-				   maxRotation(1) {}
+				   maxRotation(1),
+				   dateFormat("%Y-%m-%d %X") {}
 
 		//fine tune constructor, prefer to use basic one and just set whatever you need later
 		Logger(bool enableConsoleLogging, LogLevel minConsoleLogLevel, const std::string &consoleFormat,
 			   std::ostream &consoleStream, bool enableFileLogging, LogLevel minFileLogLevel,
 			   const std::string &fileFormat, const std::string &filePrefix, uint32_t maxFileLenght,
-			   uint32_t maxRotation)
+			   uint32_t maxRotation, const std::string &dateFormat)
 				: enableConsoleLogging(enableConsoleLogging),
 				  minConsoleLogLevel(minConsoleLogLevel),
 				  consoleFormat(consoleFormat),
@@ -193,20 +195,25 @@ namespace SL {
 				  fileFormat(fileFormat),
 				  filePrefix(filePrefix),
 				  maxFileLenght(maxFileLenght),
-				  maxRotation(maxRotation) {}
+				  maxRotation(maxRotation),
+				  dateFormat(dateFormat) {}
 
+		/*
+		 * The function always saves the logs in it's temporary store, but only outputs to console or file when the
+		 * log level is above threshold
+		 */
 		void log(LogLevel level, const std::string &message, std::exception *errorClass = nullptr) {
 			std::string what = errorClass != nullptr ? errorClass->what() : "";
 
 			LogEntry entry(level, std::chrono::system_clock::now(), message, what);
 			entries.emplace_back(entry);
 
-			if (enableConsoleLogging) {
-				*consoleStream << getFormattedEntry(entry, consoleFormat, "%Y-%m-%d %X");
+			if (enableConsoleLogging && level >= minConsoleLogLevel) {
+				*consoleStream << getFormattedEntry(entry, consoleFormat) << std::endl;
 			}
 
-			if (enableFileLogging) {
-
+			if (enableFileLogging && level >= minFileLogLevel) {
+				//todo
 			}
 		}
 
@@ -215,13 +222,14 @@ namespace SL {
 		}
 
 		void clear(const std::string &id) {
-			if (std::find_if(entries.begin(), entries.end(),
-							 [&id](const LogEntry &entry) { return entry.getId() == id; }) == entries.end()) {
+			auto it = std::find_if(entries.begin(), entries.end(), [&id](const LogEntry &entry) { return entry.getId() == id; });
+
+			if (it == entries.end()) {
 				this->log(LogLevel::ERROR, "Couldn't delete entry with id " + id + " from log.");
-				return;
+				throw InvalidLogIDException(id);
 			}
 
-			//todo clear it
+			entries.erase(it);
 		}
 
 		//setters return reference to current object to work as fluent interface
@@ -251,6 +259,11 @@ namespace SL {
 			return *this;
 		}
 
+		Logger &setMinFileLevel(LogLevel l) {
+			minFileLogLevel = l;
+			return *this;
+		}
+
 		Logger &setFileFormat(const std::string &f) {
 			fileFormat = f;
 			return *this;
@@ -268,6 +281,11 @@ namespace SL {
 
 		Logger &setMaxRotation(uint32_t r) {
 			maxRotation = r;
+			return *this;
+		}
+
+		Logger &setDateFormat(const std::string &f) {
+			dateFormat = f;
 			return *this;
 		}
 	};
