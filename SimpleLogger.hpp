@@ -127,9 +127,9 @@ namespace SL {
 		std::vector<LogEntry> entries;
 
 		//uses put_time to format the time
-		static std::string getFormattedTime(time_t time, const std::string &format) {
+		std::string getFormattedTime(time_t time) const {
 			std::stringstream ss;
-			ss << std::put_time(std::localtime(&time), format.c_str());
+			ss << std::put_time(std::localtime(&time), dateFormat.c_str());
 			return ss.str();
 		}
 
@@ -153,7 +153,7 @@ namespace SL {
 				std::string substitute;
 
 				if (c == 'I') { substitute = entry.getId(); }
-				if (c == 'T') { substitute = getFormattedTime(entry.getTime(), dateFormat); }
+				if (c == 'T') { substitute = getFormattedTime(entry.getTime()); }
 				if (c == 'L') { substitute = entry.getLogLevelAsString(); }
 				if (c == 'M') { substitute = entry.getMessage(); }
 				if (c == 'W') {
