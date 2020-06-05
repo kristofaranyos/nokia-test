@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstdint>
 #include <ctime>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <random>
@@ -98,6 +99,8 @@ namespace SL {
 				case LogLevel::ERROR:
 					return "ERROR..";
 			}
+
+			return "";
 		}
 
 		const time_t &getTime() const { return time; }
@@ -118,7 +121,7 @@ namespace SL {
 		bool enableFileLogging;
 		LogLevel minFileLogLevel;
 		std::string fileFormat;
-		std::string filePrefix;
+		std::string filePrefix, fileSuffix;
 		uint32_t maxFileLenght;
 		uint32_t maxRotation;
 
@@ -176,7 +179,8 @@ namespace SL {
 				   consoleStream(&std::cout), //could be cerr too
 				   enableFileLogging(true),
 				   minFileLogLevel(LogLevel::WARNING),
-				   fileFormat("[T] L, M, W"), filePrefix("log"),
+				   fileFormat("[T] L, M, W"),
+				   filePrefix("log"),
 				   maxFileLenght(0),
 				   maxRotation(1),
 				   dateFormat("%Y-%m-%d %X") {}
@@ -213,7 +217,11 @@ namespace SL {
 			}
 
 			if (enableFileLogging && level >= minFileLogLevel) {
-				//todo
+				std::string fileName = "log.txt";
+
+				if (fileExists(fileName)) {
+					writeEntryToFile(entry, fileName);
+				}
 			}
 		}
 
@@ -230,6 +238,16 @@ namespace SL {
 			}
 
 			entries.erase(it);
+		}
+
+		void writeEntryToFile(const LogEntry& entry, const std::string& fileName) const {
+			std::ofstream file(fileName, std::ios_base::app);
+			file << getFormattedEntry(entry, fileFormat) << std::endl;
+			file.close();
+		}
+
+		bool fileExists(const std::string &fileName) const {
+			return static_cast<bool>(std::ifstream(fileName));
 		}
 
 		//setters return reference to current object to work as fluent interface
@@ -269,8 +287,20 @@ namespace SL {
 			return *this;
 		}
 
-		Logger &setFilePrefix(const std::string &p) {
-			filePrefix = p;
+		//pattern: file name, (optionally) with extension, "[n]" anywhere in it, which gets replaced with the file number
+		//filename without [n] and a rotation number larger than 1 is undefined behavior
+		Logger &setFilename(const std::string &p) {
+			auto pos = p.find("[n]");
+			if (pos == std::string::npos) {
+				filePrefix = p;
+				fileSuffix = "";
+
+				return *this;
+			}
+
+			filePrefix = std::string(p.begin(), p.begin() + pos);
+			fileSuffix = std::string(p.begin() + pos + 3, p.end());
+
 			return *this;
 		}
 
