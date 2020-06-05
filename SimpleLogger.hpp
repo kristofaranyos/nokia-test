@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
@@ -16,7 +17,7 @@
 /*
  * Using a solution from https://stackoverflow.com/questions/24365331/how-can-i-generate-uuid-in-c-without-using-boost-library
  * Copy pasting may seem bad, but there is no need to reinvent the wheel, in a normal project,
- * there probably would be already an established id scheme
+ * there would probably be already an established id scheme
  */
 namespace uuid {
 
@@ -122,7 +123,7 @@ namespace SL {
 		LogLevel minFileLogLevel;
 		std::string fileFormat;
 		std::string filePrefix, fileSuffix;
-		uint32_t maxFileLenght;
+		uint32_t maxFileLength;
 		uint32_t maxRotation;
 
 		std::string dateFormat;
@@ -149,6 +150,7 @@ namespace SL {
 		 *
 		 * Example: "[T] L, M, W"
 		 */
+		//todo add proper tokens to enable use of uppercase characters
 		std::string getFormattedEntry(const LogEntry &entry, const std::string &lineFormat) const {
 			std::string formattedEntry;
 
@@ -182,7 +184,7 @@ namespace SL {
 				   fileFormat("[T] L, M, W"),
 				   filePrefix("log"),
 				   fileSuffix(".txt"),
-				   maxFileLenght(0),
+				   maxFileLength(0),
 				   maxRotation(1),
 				   dateFormat("%Y-%m-%d %X") {}
 
@@ -190,7 +192,7 @@ namespace SL {
 		Logger(bool enableConsoleLogging, LogLevel minConsoleLogLevel, const std::string &consoleFormat,
 			   std::ostream &consoleStream, bool enableFileLogging, LogLevel minFileLogLevel,
 			   const std::string &fileFormat, const std::string &filePrefix, const std::string &fileSuffix,
-			   uint32_t maxFileLenght, uint32_t maxRotation, const std::string &dateFormat)
+			   uint32_t maxFileLength, uint32_t maxRotation, const std::string &dateFormat)
 				: enableConsoleLogging(enableConsoleLogging),
 				  minConsoleLogLevel(minConsoleLogLevel),
 				  consoleFormat(consoleFormat),
@@ -200,7 +202,7 @@ namespace SL {
 				  fileFormat(fileFormat),
 				  filePrefix(filePrefix),
 				  fileSuffix(fileSuffix),
-				  maxFileLenght(maxFileLenght),
+				  maxFileLength(maxFileLength),
 				  maxRotation(maxRotation),
 				  dateFormat(dateFormat) {}
 
@@ -219,11 +221,63 @@ namespace SL {
 			}
 
 			if (enableFileLogging && level >= minFileLogLevel) {
-				std::string fileName = "log.txt";
+				std::string activeFileName = filePrefix + fileSuffix;
 
-				if (fileExists(fileName)) {
-					writeEntryToFile(entry, fileName);
+				//if doesn't exist, simply write (creates a new file)
+				if (!fileExists(activeFileName)) {
+					writeEntryToFile(entry, activeFileName);
+
+					return;
 				}
+
+				//check file length, 0 means unlimited
+				//this HAS to come before checking if the file is larger than maxFileLength
+				if (maxFileLength == 0) {
+					writeEntryToFile(entry, activeFileName);
+
+					return;
+				}
+
+				//append if file is not too long
+				if (getfileRowCount(activeFileName) < maxFileLength) {
+					writeEntryToFile(entry, activeFileName);
+
+					return;
+				}
+
+				//count files in rotation
+				uint32_t fileCount = 0;
+
+				for (uint32_t i = 1; i <= maxRotation; ++i) {
+					if (fileExists(filePrefix + std::to_string(i) + fileSuffix)) {
+						++fileCount;
+					}
+				}
+
+				//"place back" if rotation isn't full
+				if (fileCount < maxRotation) {
+					std::string newFileName = filePrefix + std::to_string(fileCount + 1) + fileSuffix;
+					std::rename(activeFileName.c_str(), newFileName.c_str());
+
+					writeEntryToFile(entry, activeFileName);
+
+					return;
+				}
+
+				//rotation is full, push back all files by one
+				std::remove(std::string(filePrefix + "1" + fileSuffix).c_str());
+				for (uint32_t i = 1; i < maxRotation; ++i) {
+					std::string oldFileName = filePrefix + std::to_string(i + 1) + fileSuffix;
+					std::string newFileName = filePrefix + std::to_string(i) + fileSuffix;
+					std::rename(oldFileName.c_str(), newFileName.c_str());
+				}
+
+				//push back active to 10
+				std::string newFileName = filePrefix + "10" + fileSuffix;
+				std::rename(activeFileName.c_str(), newFileName.c_str());
+
+				//and write to file
+				writeEntryToFile(entry, activeFileName);
 			}
 		}
 
@@ -232,7 +286,8 @@ namespace SL {
 		}
 
 		void clear(const std::string &id) {
-			auto it = std::find_if(entries.begin(), entries.end(), [&id](const LogEntry &entry) { return entry.getId() == id; });
+			auto it = std::find_if(entries.begin(), entries.end(),
+								   [&id](const LogEntry &entry) { return entry.getId() == id; });
 
 			if (it == entries.end()) {
 				this->log(LogLevel::ERROR, "Couldn't delete entry with id " + id + " from log.");
@@ -240,9 +295,11 @@ namespace SL {
 			}
 
 			entries.erase(it);
+
+			//todo remove from files as well
 		}
 
-		void writeEntryToFile(const LogEntry& entry, const std::string& fileName) const {
+		void writeEntryToFile(const LogEntry &entry, const std::string &fileName) const {
 			std::ofstream file(fileName, std::ios_base::app);
 			file << getFormattedEntry(entry, fileFormat) << std::endl;
 			file.close();
@@ -250,6 +307,12 @@ namespace SL {
 
 		bool fileExists(const std::string &fileName) const {
 			return static_cast<bool>(std::ifstream(fileName));
+		}
+
+		uint32_t getfileRowCount(const std::string &fileName) const {
+			std::ifstream file(fileName);
+
+			return std::count(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), '\n');
 		}
 
 		//setters return reference to current object to work as fluent interface
@@ -307,7 +370,7 @@ namespace SL {
 		}
 
 		Logger &setmaxFileLength(uint32_t l) {
-			maxFileLenght = l;
+			maxFileLength = l;
 			return *this;
 		}
 
