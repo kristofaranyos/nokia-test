@@ -143,8 +143,8 @@ namespace SL {
 		 * and the function will substitute the data in place of the tokens
 		 *
 		 * Tokens:
-		 * - I : id
-		 * - T : time
+		 * - I : Id
+		 * - T : Time
 		 * - L : LogLevel
 		 * - M : Message
 		 * - W : Output of what() if any
@@ -321,7 +321,7 @@ namespace SL {
 
 			entries.erase(it);
 
-			//todo remove from files as well
+			//todo maybe remove from files
 		}
 
 		//setters return reference to current object to work as fluent interface
