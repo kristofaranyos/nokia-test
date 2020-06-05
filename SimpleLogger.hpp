@@ -174,6 +174,34 @@ namespace SL {
 			return formattedEntry;
 		}
 
+		void writeEntryToFile(const LogEntry &entry, const std::string &fileName) const {
+			std::ofstream file(fileName, std::ios_base::app);
+			file << getFormattedEntry(entry, fileFormat) << std::endl;
+			file.close();
+		}
+
+		bool fileExists(const std::string &fileName) const {
+			return static_cast<bool>(std::ifstream(fileName));
+		}
+
+		uint32_t getfileRowCount(const std::string &fileName) const {
+			std::ifstream file(fileName);
+
+			return std::count(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), '\n');
+		}
+
+		uint32_t getFileCount() const {
+			uint32_t fileCount = 0;
+
+			for (uint32_t i = 1; i <= maxRotation; ++i) {
+				if (fileExists(filePrefix + std::to_string(i) + fileSuffix)) {
+					++fileCount;
+				}
+			}
+
+			return fileCount;
+		}
+
 	public:
 		//usable default values
 		Logger() : enableConsoleLogging(false),
@@ -294,34 +322,6 @@ namespace SL {
 			entries.erase(it);
 
 			//todo remove from files as well
-		}
-
-		void writeEntryToFile(const LogEntry &entry, const std::string &fileName) const {
-			std::ofstream file(fileName, std::ios_base::app);
-			file << getFormattedEntry(entry, fileFormat) << std::endl;
-			file.close();
-		}
-
-		bool fileExists(const std::string &fileName) const {
-			return static_cast<bool>(std::ifstream(fileName));
-		}
-
-		uint32_t getfileRowCount(const std::string &fileName) const {
-			std::ifstream file(fileName);
-
-			return std::count(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), '\n');
-		}
-
-		uint32_t getFileCount() const {
-			uint32_t fileCount = 0;
-
-			for (uint32_t i = 1; i <= maxRotation; ++i) {
-				if (fileExists(filePrefix + std::to_string(i) + fileSuffix)) {
-					++fileCount;
-				}
-			}
-
-			return fileCount;
 		}
 
 		//setters return reference to current object to work as fluent interface
