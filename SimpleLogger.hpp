@@ -125,6 +125,7 @@ namespace SL {
 		std::string filePrefix, fileSuffix;
 		uint32_t maxFileLength;
 		uint32_t maxRotation;
+		bool logFull;
 
 		std::string dateFormat;
 
@@ -186,13 +187,14 @@ namespace SL {
 				   fileSuffix(".txt"),
 				   maxFileLength(0),
 				   maxRotation(1),
-				   dateFormat("%Y-%m-%d %X") {}
+				   dateFormat("%Y-%m-%d %X"),
+				   logFull(false) {}
 
 		//fine tune constructor, prefer to use basic one and just set whatever you need later
 		Logger(bool enableConsoleLogging, LogLevel minConsoleLogLevel, const std::string &consoleFormat,
 			   std::ostream &consoleStream, bool enableFileLogging, LogLevel minFileLogLevel,
 			   const std::string &fileFormat, const std::string &filePrefix, const std::string &fileSuffix,
-			   uint32_t maxFileLength, uint32_t maxRotation, const std::string &dateFormat)
+			   uint32_t maxFileLength, uint32_t maxRotation, const std::string &dateFormat, bool logFull)
 				: enableConsoleLogging(enableConsoleLogging),
 				  minConsoleLogLevel(minConsoleLogLevel),
 				  consoleFormat(consoleFormat),
@@ -204,7 +206,8 @@ namespace SL {
 				  fileSuffix(fileSuffix),
 				  maxFileLength(maxFileLength),
 				  maxRotation(maxRotation),
-				  dateFormat(dateFormat) {}
+				  dateFormat(dateFormat),
+				  logFull(logFull) {}
 
 		/*
 		 * The function always saves the logs in it's temporary store, but only outputs to console or file when the
@@ -224,7 +227,7 @@ namespace SL {
 				std::string activeFileName = filePrefix + fileSuffix;
 
 				//if doesn't exist, simply write (creates a new file)
-				if (!fileExists(activeFileName)) {
+				if (!logFull && !fileExists(activeFileName)) {
 					writeEntryToFile(entry, activeFileName);
 
 					return;
@@ -232,27 +235,21 @@ namespace SL {
 
 				//check file length, 0 means unlimited
 				//this HAS to come before checking if the file is larger than maxFileLength
-				if (maxFileLength == 0) {
+				if (!logFull && maxFileLength == 0) {
 					writeEntryToFile(entry, activeFileName);
 
 					return;
 				}
 
 				//append if file is not too long
-				if (getfileRowCount(activeFileName) < maxFileLength) {
+				if (!logFull && getfileRowCount(activeFileName) < maxFileLength) {
 					writeEntryToFile(entry, activeFileName);
 
 					return;
 				}
 
-				//count files in rotation
-				uint32_t fileCount = 0;
-
-				for (uint32_t i = 1; i <= maxRotation; ++i) {
-					if (fileExists(filePrefix + std::to_string(i) + fileSuffix)) {
-						++fileCount;
-					}
-				}
+				uint32_t fileCount = getFileCount();
+				if (logFull) { logFull = false; }
 
 				//"place back" if rotation isn't full
 				if (fileCount < maxRotation) {
@@ -313,6 +310,18 @@ namespace SL {
 			std::ifstream file(fileName);
 
 			return std::count(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), '\n');
+		}
+
+		uint32_t getFileCount() const {
+			uint32_t fileCount = 0;
+
+			for (uint32_t i = 1; i <= maxRotation; ++i) {
+				if (fileExists(filePrefix + std::to_string(i) + fileSuffix)) {
+					++fileCount;
+				}
+			}
+
+			return fileCount;
 		}
 
 		//setters return reference to current object to work as fluent interface
@@ -376,6 +385,11 @@ namespace SL {
 
 		Logger &setMaxRotation(uint32_t r) {
 			maxRotation = r;
+			return *this;
+		}
+
+		Logger &setLogFull() {
+			logFull = true;
 			return *this;
 		}
 
