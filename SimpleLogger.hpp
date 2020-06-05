@@ -181,6 +181,7 @@ namespace SL {
 				   minFileLogLevel(LogLevel::WARNING),
 				   fileFormat("[T] L, M, W"),
 				   filePrefix("log"),
+				   fileSuffix(".txt"),
 				   maxFileLenght(0),
 				   maxRotation(1),
 				   dateFormat("%Y-%m-%d %X") {}
@@ -188,8 +189,8 @@ namespace SL {
 		//fine tune constructor, prefer to use basic one and just set whatever you need later
 		Logger(bool enableConsoleLogging, LogLevel minConsoleLogLevel, const std::string &consoleFormat,
 			   std::ostream &consoleStream, bool enableFileLogging, LogLevel minFileLogLevel,
-			   const std::string &fileFormat, const std::string &filePrefix, uint32_t maxFileLenght,
-			   uint32_t maxRotation, const std::string &dateFormat)
+			   const std::string &fileFormat, const std::string &filePrefix, const std::string &fileSuffix,
+			   uint32_t maxFileLenght, uint32_t maxRotation, const std::string &dateFormat)
 				: enableConsoleLogging(enableConsoleLogging),
 				  minConsoleLogLevel(minConsoleLogLevel),
 				  consoleFormat(consoleFormat),
@@ -198,6 +199,7 @@ namespace SL {
 				  minFileLogLevel(minFileLogLevel),
 				  fileFormat(fileFormat),
 				  filePrefix(filePrefix),
+				  fileSuffix(fileSuffix),
 				  maxFileLenght(maxFileLenght),
 				  maxRotation(maxRotation),
 				  dateFormat(dateFormat) {}
