@@ -363,7 +363,7 @@ namespace SL {
 
 		//pattern: file name, (optionally) with extension, "[n]" anywhere in it, which gets replaced with the file number
 		//filename without [n] and a rotation number larger than 1 is undefined behavior
-		Logger &setFilename(const std::string &p) {
+		Logger &setFileName(const std::string &p) {
 			auto pos = p.find("[n]");
 			if (pos == std::string::npos) {
 				filePrefix = p;
